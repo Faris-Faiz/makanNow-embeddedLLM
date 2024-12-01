@@ -1,0 +1,9 @@
+streamlit
+pandas
+plotly
+numpy
+googlemaps
+geocoder
+jamaibase
+requests
+python-dotenv
