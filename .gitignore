@@ -2,3 +2,4 @@
 pages/.env
 /pages/__pycache__
 python_sdk_documentation_jamai_base_docs.md
+demo_script.md

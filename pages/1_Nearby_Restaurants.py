@@ -6,10 +6,10 @@ from utils import (
     get_nearby_restaurants
 )
 
-st.set_page_config(page_title="Restaurant Finder", page_icon="🍽️", layout="wide")
+st.set_page_config(page_title="Makan Now", page_icon="🍽️", layout="wide")
 
 def main():
-    st.title('🍽️ Smart Restaurant Finder')
+    st.title('🍽️ Makan Now')
     
     # Sidebar for inputs
     st.sidebar.header('API Credentials')
