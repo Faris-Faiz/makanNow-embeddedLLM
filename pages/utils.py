@@ -2,51 +2,30 @@ import streamlit as st
 import googlemaps
 import time
 import requests
-import os
 from jamaibase import JamAI
 from jamaibase import protocol as p
-from dotenv import load_dotenv
-from pathlib import Path
 
-# Load environment variables from the root directory
-env_path = 'C:\\Users\\Faris\\Documents\\GitHub\\MakanNow\\practical_ai_assignment\\pages\\.env'
-load_dotenv(env_path)
-
-def initialize_jamai():
+def initialize_jamai(project_id, api_key):
     """Initialize JamAI client with proper error handling and user guidance"""
-    project_id = os.getenv('JAMAI_PROJECT_ID')
-    token = os.getenv('JAMAI_API_KEY')
-    
-    if not project_id or not token:
+    if not project_id or not api_key:
         st.error("""
-        ⚠️ JamAI credentials not found! Please set up your credentials:
+        ⚠️ JamAI credentials missing! Please provide both Project ID and API Key.
         
-        1. Create a .env file in the practical_ai_assignment directory (not in the pages folder)
-        2. Add your JamAI credentials:
-           ```
-           JAMAI_PROJECT_ID=your_project_id
-           JAMAI_API_KEY=your_api_key
-           ```
-        3. Get your credentials from:
-           - Project ID: Browse to any of your projects at cloud.jamaibase.com
-           - API Key: Visit cloud.jamaibase.com/organization/secrets
-        
-        Current .env path: {env_path}
+        Get your credentials from:
+        - Project ID: Browse to any of your projects at cloud.jamaibase.com
+        - API Key: Visit cloud.jamaibase.com/organization/secrets
         """)
         st.stop()
     
-    return JamAI(project_id=project_id, token=token)
+    return JamAI(project_id=project_id, token=api_key)
 
-# Initialize JamAI client
-jamai = initialize_jamai()
-
-def initialize_tables():
+def initialize_tables(jamai):
     """Initialize JamAI tables for restaurant data and review processing"""
     try:
         # Create Knowledge Table for restaurant data
         jamai.table.create_knowledge_table(
             p.KnowledgeTableSchemaCreate(
-                id="restaurants_data",  # Changed to use underscore
+                id="restaurants_data",
                 cols=[],
                 embedding_model="ellm/BAAI/bge-m3",
             )
@@ -55,16 +34,16 @@ def initialize_tables():
         # Create Action Table for review processing
         jamai.table.create_action_table(
             p.ActionTableSchemaCreate(
-                id="review_processor",  # Changed to use underscore
+                id="review_processor",
                 cols=[
-                    p.ColumnSchemaCreate(id="review_text", dtype="str"),  # Changed column name
+                    p.ColumnSchemaCreate(id="review_text", dtype="str"),
                     p.ColumnSchemaCreate(
                         id="summary",
                         dtype="str",
                         gen_config=p.LLMGenConfig(
-                            model="openai/gpt-4o-mini",  # Using specific model
+                            model="openai/gpt-4o-mini",
                             system_prompt="You are a restaurant review summarizer. Highlight key positive and negative points.",
-                            prompt="Summarize these restaurant reviews:\n\n${review_text}",  # Updated to match column name
+                            prompt="Summarize these restaurant reviews:\n\n${review_text}",
                             temperature=0.3,
                             max_tokens=150,
                         ),
@@ -78,7 +57,7 @@ def initialize_tables():
     except Exception as e:
         st.error(f"""
         ❌ Error initializing JamAI tables. Please check:
-        1. Your credentials in the .env file are correct
+        1. Your credentials are correct
         2. You have an active internet connection
         3. The JamAI service is available
         
@@ -105,7 +84,7 @@ def get_photo_url(photo_reference, api_key, maxwidth=400):
     photo_url = f"{base_url}?maxwidth={maxwidth}&photo_reference={photo_reference}&key={api_key}"
     return photo_url
 
-def process_reviews(reviews):
+def process_reviews(reviews, jamai):
     """Process restaurant reviews using JamAI"""
     if not reviews:
         return "No reviews available."
@@ -117,10 +96,10 @@ def process_reviews(reviews):
         
         # Get review summary using non-streaming mode
         completion = jamai.table.add_table_rows(
-            "action",  # Table type
+            "action",
             p.RowAddRequest(
-                table_id="review_processor",  # Must match the table ID from initialize_tables
-                data=[{"review_text": reviews_combined}],  # Must match column name from schema
+                table_id="review_processor",
+                data=[{"review_text": reviews_combined}],
                 stream=False,
             ),
         )
@@ -142,7 +121,7 @@ def process_reviews(reviews):
         """)
         return "Review processing unavailable."
 
-def get_nearby_restaurants(api_key, location, radius, budget, preferences, exclude_no_price_info=True):
+def get_nearby_restaurants(google_api_key, location, radius, budget, preferences, exclude_no_price_info, jamai):
     """Get nearby restaurants with enhanced filtering and processing"""
     progress_bar = st.progress(0)
     status_text = st.empty()
@@ -151,7 +130,7 @@ def get_nearby_restaurants(api_key, location, radius, budget, preferences, exclu
         # Initialize Google Maps client
         status_text.info('Initializing Google Maps Client...')
         progress_bar.progress(10)
-        gmaps = googlemaps.Client(key=api_key)
+        gmaps = googlemaps.Client(key=google_api_key)
         
         # Get places nearby
         status_text.info('Searching for nearby restaurants...')
@@ -195,17 +174,17 @@ def get_nearby_restaurants(api_key, location, radius, budget, preferences, exclu
                     continue
                 
                 # Get photo URL
-                photos = result.get('photos', [])  # Change 'photo' to 'photos'
+                photos = result.get('photos', [])
                 photo_url = None
                 if photos:
                     try:
-                        photo_url = get_photo_url(photos[0]['photo_reference'], api_key)
+                        photo_url = get_photo_url(photos[0]['photo_reference'], google_api_key)
                     except (KeyError, IndexError) as e:
                         print(f"Error processing photo: {e}")
                 
                 # Process reviews
                 reviews = result.get('reviews', [])
-                review_summary = process_reviews(reviews)
+                review_summary = process_reviews(reviews, jamai)
                 
                 restaurant = {
                     'name': result.get('name', 'N/A'),
